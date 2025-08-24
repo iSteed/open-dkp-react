@@ -177,7 +177,7 @@ This document lists all functions, features, and capabilities of the OpenDKP Rea
 ## 11. TESTING CATEGORIES FOR FUTURE REFERENCE
 
 ### Unit Tests
-- [ ] Context state management and reducers
+- [x] Context state management and reducers
 - [ ] Custom hooks functionality
 - [ ] API client methods
 - [ ] Data transformation utilities
