@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Calendar, 
@@ -22,8 +22,25 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
+import { 
+  useCharacters, 
+  useRaids, 
+  useItems, 
+  useItemTransactions,
+  useAdjustments,
+  usePools,
+  useDKPSummary,
+  useGuildStats,
+  useSettings,
+  useLogParser,
+  useUsers,
+  useTicks,
+  useClientConfig
+} from './hooks/useData';
+import { AppProvider } from './context/AppContext';
 
-const OpenDKPApp = () => {
+// Main app component that uses hooks for data
+const OpenDKPAppContent = () => {
   const [currentPage, setCurrentPage] = useState('summary');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState('officer');
@@ -36,61 +53,20 @@ const OpenDKPApp = () => {
     admin: true
   });
 
-  const mockCharacters = [
-    { id: 1, name: 'Thorgan', characterClass: 'Warrior', race: 'Human', level: 70, dkp: 150, attendance: '85%', rank: 'Member' },
-    { id: 2, name: 'Mystara', characterClass: 'Cleric', race: 'High Elf', level: 68, dkp: 134, attendance: '92%', rank: 'Officer' },
-    { id: 3, name: 'Shadowbane', characterClass: 'Rogue', race: 'Dark Elf', level: 69, dkp: 98, attendance: '76%', rank: 'Guest' },
-    { id: 4, name: 'Flameheart', characterClass: 'Wizard', race: 'Gnome', level: 67, dkp: 201, attendance: '88%', rank: 'Member' }
-  ];
+  // API hooks for data management
+  const { characters, loading: charactersLoading, error: charactersError, refreshCharacters, createCharacter, updateCharacter, deleteCharacter } = useCharacters();
 
-  const mockRaids = [
-    { 
-      id: 1, 
-      name: 'Plane of Time', 
-      date: '2024-08-10', 
-      attendees: 24, 
-      dkpAwarded: 15, 
-      status: 'Completed',
-      ticks: [
-        { id: 1, name: 'Initial Attendance', type: 'attendance', dkpValue: 5, attendees: ['Thorgan', 'Mystara', 'Shadowbane', 'Flameheart'] },
-        { id: 2, name: 'Phase Hunter Kill', type: 'kill', dkpValue: 5, attendees: ['Thorgan', 'Mystara', 'Flameheart'] },
-        { id: 3, name: 'Final Attendance', type: 'attendance', dkpValue: 5, attendees: ['Thorgan', 'Mystara', 'Shadowbane'] }
-      ]
-    },
-    { 
-      id: 2, 
-      name: 'Vex Thal', 
-      date: '2024-08-08', 
-      attendees: 18, 
-      dkpAwarded: 12, 
-      status: 'Completed',
-      ticks: [
-        { id: 1, name: 'Raid Start', type: 'attendance', dkpValue: 6, attendees: ['Thorgan', 'Mystara', 'Shadowbane'] },
-        { id: 2, name: 'Raid End', type: 'attendance', dkpValue: 6, attendees: ['Thorgan', 'Mystara'] }
-      ]
-    },
-    { 
-      id: 3, 
-      name: 'Ssraeshza Temple', 
-      date: '2024-08-12', 
-      attendees: 0, 
-      dkpAwarded: 0, 
-      status: 'Scheduled',
-      ticks: []
-    }
-  ];
-
-  const mockItems = [
-    { id: 1, name: 'Time-Phased Leggings', zone: 'Plane of Time', winner: 'Thorgan', dkp: 45, date: '2024-08-10' },
-    { id: 2, name: 'Earring of Twisted Leaves', zone: 'Vex Thal', winner: 'Mystara', dkp: 32, date: '2024-08-08' },
-    { id: 3, name: 'Cloak of Flame', zone: 'Plane of Time', winner: 'Flameheart', dkp: 38, date: '2024-08-10' }
-  ];
-
-  const mockRequests = [
-    { id: 1, type: 'Character Assignment', player: 'NewPlayer', character: 'Darkblade', status: 'Pending' },
-    { id: 2, type: 'Raid Tick', player: 'Mystara', raid: 'Plane of Time', status: 'Pending' },
-    { id: 3, type: 'DKP Adjustment', player: 'Shadowbane', reason: 'Late arrival penalty', status: 'Approved' }
-  ];
+  const { raids, loading: raidsLoading, error: raidsError, refreshRaids, createRaid, updateRaid, deleteRaid } = useRaids();
+  const { items, loading: itemsLoading, error: itemsError, refreshItems, createItem } = useItems();
+  const { transactions, loading: transactionsLoading, refreshTransactions, createTransaction, updateTransaction, deleteTransaction } = useItemTransactions();
+  const { adjustments, loading: adjustmentsLoading, refreshAdjustments, createAdjustment, updateAdjustment, deleteAdjustment } = useAdjustments();
+  const { pools, loading: poolsLoading, error: poolsError, refreshPools, createPool } = usePools();
+  const { summary: dkpSummary, loading: dkpLoading, refreshSummary, loadLeaderboard } = useDKPSummary();
+  const { stats: guildStats, loading: statsLoading, refreshStats } = useGuildStats();
+  const { settings, loading: settingsLoading, refreshSettings, updateSettings } = useSettings();
+  const { parseResults, loading: parseLoading, error: parseError, parseLog, autoCreateCharacters, clearResults } = useLogParser();
+  const { users, loading: usersLoading, refreshUsers, manageUser } = useUsers();
+  const { clientId, setClient } = useClientConfig();
 
   const navigation = [
     {
@@ -159,27 +135,39 @@ const OpenDKPApp = () => {
     'Recruit': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
   };
 
-  const mockFunctions = {
-    addCharacter: () => {
-      console.log('DEBUG: Would call API to add new character');
-      console.log('API Call: POST /api/characters');
-      alert('Debug: Add Character functionality triggered');
+  // Real API functions replacing mock functions
+  const apiFunctions = {
+    addCharacter: createCharacter,
+    editCharacter: updateCharacter,
+    deleteCharacter: deleteCharacter,
+    scheduleRaid: createRaid,
+    editRaid: updateRaid,
+    viewRaid: (id) => console.log('Viewing raid', id),
+    addItem: createItem,
+    editItem: (id) => console.log('Edit item', id),
+    viewItem: (id) => console.log('Viewing item', id),
+    approveRequest: (id) => console.log('Approving request', id),
+    denyRequest: (id) => console.log('Denying request', id),
+    saveSettings: updateSettings,
+    requestRaidTick: () => console.log('Requesting raid tick'),
+    createRaid: createRaid,
+    createAdjustment: createAdjustment,
+    createCharacter: createCharacter,
+    manageUsers: manageUser,
+    addTick: (raidId) => console.log('Adding tick to raid', raidId),
+    editTick: (raidId, tickId) => console.log('Editing tick', tickId),
+    deleteTick: (raidId, tickId) => console.log('Deleting tick', tickId),
+    parseLog: async (logText, onCharacterUpdate) => {
+      try {
+        const results = await parseLog(logText);
+        return results?.characters?.map(c => c.name) || [];
+      } catch (error) {
+        console.error('Error parsing log:', error);
+        return [];
+      }
     },
-    editCharacter: (id) => {
-      console.log('DEBUG: Would call API to edit character with ID: ' + id);
-      console.log('API Call: PUT /api/characters/' + id);
-      alert('Debug: Edit Character ' + id + ' functionality triggered');
-    },
-    deleteCharacter: (id) => {
-      console.log('DEBUG: Would call API to delete character with ID: ' + id);
-      console.log('API Call: DELETE /api/characters/' + id);
-      alert('Debug: Delete Character ' + id + ' functionality triggered');
-    },
-    scheduleRaid: () => {
-      console.log('DEBUG: Would call API to schedule new raid');
-      console.log('API Call: POST /api/raids');
-      alert('Debug: Schedule Raid functionality triggered');
-    },
+    autoCreateCharacter: async (name, level, guild, characterClass) => {
+      await createCharacter({ name, level, guild, character_class: characterClass });
     editRaid: (id) => {
       console.log('DEBUG: Would call API to edit raid with ID: ' + id);
       console.log('API Call: PUT /api/raids/' + id);
@@ -331,10 +319,10 @@ const OpenDKPApp = () => {
       
       // Auto-create new characters
       characterData.forEach(char => {
-        const existingChar = mockCharacters.find(c => c.name.toLowerCase() === char.name.toLowerCase());
+        const existingChar = characters.find(c => c.name.toLowerCase() === char.name.toLowerCase());
         if (!existingChar) {
           console.log('DEBUG: Auto-creating character: ' + char.name + ' (' + char.level + ' ' + char.characterClass + ' from ' + char.guild + ')');
-          mockFunctions.autoCreateCharacter(char.name, char.level, char.guild, char.characterClass);
+          apiFunctions.autoCreateCharacter(char.name, char.level, char.guild, char.characterClass);
         } else {
           console.log('DEBUG: Updating existing character: ' + char.name);
           if (onCharacterUpdate) {
@@ -363,7 +351,7 @@ const OpenDKPApp = () => {
               <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               <div className="ml-3">
                 <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Active Members</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{mockCharacters.length}</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{characters?.length || 0}</p>
               </div>
             </div>
           </div>
@@ -381,7 +369,7 @@ const OpenDKPApp = () => {
               <Award className="h-8 w-8 text-purple-600 dark:text-purple-400" />
               <div className="ml-3">
                 <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Items Distributed</p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-200">{mockItems.length}</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-200">{items.length}</p>
               </div>
             </div>
           </div>
@@ -401,7 +389,7 @@ const OpenDKPApp = () => {
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Raids</h3>
           <div className="space-y-3">
-            {mockRaids.slice(0, 3).map((raid) => (
+            {raids.slice(0, 3).map((raid) => (
               <div key={raid.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">{raid.name}</p>
@@ -420,7 +408,7 @@ const OpenDKPApp = () => {
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top DKP Earners</h3>
           <div className="space-y-3">
-            {mockCharacters.sort((a, b) => b.dkp - a.dkp).slice(0, 4).map((character, index) => (
+            {characters.sort((a, b) => b.dkp - a.dkp).slice(0, 4).map((character, index) => (
               <div key={character.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="flex items-center">
                   <span className="w-6 h-6 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-sm font-medium mr-3 text-gray-700 dark:text-gray-300">
@@ -479,7 +467,7 @@ const OpenDKPApp = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {mockCharacters.map((character) => (
+              {characters.map((character) => (
                 <tr key={character.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -506,14 +494,14 @@ const OpenDKPApp = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
                       <button 
-                        onClick={() => mockFunctions.editCharacter(character.id)}
+                        onClick={() => apiFunctions.editCharacter(character.id)}
                         className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       {(userRole === 'admin') && (
                         <button 
-                          onClick={() => mockFunctions.deleteCharacter(character.id)}
+                          onClick={() => apiFunctions.deleteCharacter(character.id)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -537,7 +525,7 @@ const OpenDKPApp = () => {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">DKP Adjustments</h2>
           {(userRole === 'officer' || userRole === 'admin') && (
             <button 
-              onClick={mockFunctions.createAdjustment}
+              onClick={apiFunctions.createAdjustment}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
             >
               <PlusCircle className="h-5 w-5 mr-2" />
@@ -594,7 +582,7 @@ const OpenDKPApp = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Character</label>
               <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
                 <option>Select Character</option>
-                {mockCharacters.map(char => (
+                {characters.map(char => (
                   <option key={char.id} value={char.name}>{char.name}</option>
                 ))}
               </select>
@@ -603,7 +591,7 @@ const OpenDKPApp = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Raid</label>
               <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
                 <option>Select Raid</option>
-                {mockRaids.map(raid => (
+                {raids.map(raid => (
                   <option key={raid.id} value={raid.name}>{raid.name} - {raid.date}</option>
                 ))}
               </select>
@@ -617,7 +605,7 @@ const OpenDKPApp = () => {
               />
             </div>
             <button 
-              onClick={mockFunctions.requestRaidTick}
+              onClick={apiFunctions.requestRaidTick}
               className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Submit Request
@@ -625,11 +613,11 @@ const OpenDKPApp = () => {
           </div>
         </div>
 
-        {mockRequests.length > 0 && (
+        {[].length > 0 && (
           <div className="mt-8">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Recent Requests</h3>
             <div className="space-y-3">
-              {mockRequests.filter(req => req.type === 'Raid Tick').map((request) => (
+              {[].filter(req => req.type === 'Raid Tick').map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">{request.raid}</p>
@@ -658,7 +646,7 @@ const OpenDKPApp = () => {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Item History</h2>
           {(userRole === 'officer' || userRole === 'admin') && (
             <button 
-              onClick={mockFunctions.addItem}
+              onClick={apiFunctions.addItem}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
             >
               <PlusCircle className="h-5 w-5 mr-2" />
@@ -680,7 +668,7 @@ const OpenDKPApp = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {mockItems.map((item) => (
+              {items.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -697,14 +685,14 @@ const OpenDKPApp = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
                       <button 
-                        onClick={() => mockFunctions.viewItem(item.id)}
+                        onClick={() => apiFunctions.viewItem(item.id)}
                         className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         View
                       </button>
                       {(userRole === 'officer' || userRole === 'admin') && (
                         <button 
-                          onClick={() => mockFunctions.editItem(item.id)}
+                          onClick={() => apiFunctions.editItem(item.id)}
                           className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                         >
                           Edit
@@ -739,12 +727,12 @@ const OpenDKPApp = () => {
       setSelectedRaid(raid);
       setEditingTick(null);
       setShowAddTick(false);
-      mockFunctions.viewRaid(raid.id);
+      apiFunctions.viewRaid(raid.id);
     };
 
     const handleParseLog = (logText, setTickFn) => {
       if (logText) {
-        const results = mockFunctions.parseLog(logText, (characterId, updatedData) => {
+        const results = apiFunctions.parseLog(logText, (characterId, updatedData) => {
           console.log('DEBUG: Character update callback for ID:', characterId, 'with data:', updatedData);
         });
         
@@ -759,7 +747,7 @@ const OpenDKPApp = () => {
 
     const handleSaveTick = (tickData, isNewTick = false) => {
       if (isNewTick) {
-        mockFunctions.addTick(selectedRaid.id);
+        apiFunctions.addTick(selectedRaid.id);
         setShowAddTick(false);
         setNewTick({
           name: '',
@@ -770,7 +758,7 @@ const OpenDKPApp = () => {
           parsedCharacters: []
         });
       } else {
-        mockFunctions.editTick(selectedRaid.id, editingTick.id);
+        apiFunctions.editTick(selectedRaid.id, editingTick.id);
         setEditingTick(null);
       }
       setParseResults(null);
@@ -799,7 +787,7 @@ const OpenDKPApp = () => {
               </div>
               {(userRole === 'officer' || userRole === 'admin') && (
                 <button 
-                  onClick={() => mockFunctions.editRaid(selectedRaid.id)}
+                  onClick={() => apiFunctions.editRaid(selectedRaid.id)}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
                 >
                   <Edit className="h-5 w-5 mr-2" />
@@ -1034,7 +1022,7 @@ const OpenDKPApp = () => {
                                     <Edit className="h-4 w-4" />
                                   </button>
                                   <button 
-                                    onClick={() => mockFunctions.deleteTick(selectedRaid.id, tick.id)}
+                                    onClick={() => apiFunctions.deleteTick(selectedRaid.id, tick.id)}
                                     className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1087,7 +1075,7 @@ const OpenDKPApp = () => {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Raids</h2>
             {(userRole === 'officer' || userRole === 'admin') && (
               <button 
-                onClick={mockFunctions.scheduleRaid}
+                onClick={apiFunctions.scheduleRaid}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
               >
                 <PlusCircle className="h-5 w-5 mr-2" />
@@ -1110,7 +1098,7 @@ const OpenDKPApp = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {mockRaids.map((raid) => (
+                {raids.map((raid) => (
                   <tr key={raid.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -1145,7 +1133,7 @@ const OpenDKPApp = () => {
                         </button>
                         {(userRole === 'officer' || userRole === 'admin') && (
                           <button 
-                            onClick={() => mockFunctions.editRaid(raid.id)}
+                            onClick={() => apiFunctions.editRaid(raid.id)}
                             className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                           >
                             Edit
@@ -1201,18 +1189,18 @@ const OpenDKPApp = () => {
         });
         setParseResults(null);
         setShowTickForm(false);
-        mockFunctions.addTick('new');
+        apiFunctions.addTick('new');
       }
     };
 
     const handleRemoveTick = (tickId) => {
       setTicks(ticks.filter(tick => tick.id !== tickId));
-      mockFunctions.deleteTick('new', tickId);
+      apiFunctions.deleteTick('new', tickId);
     };
 
     const handleParseLog = () => {
       if (currentTick.logText) {
-        const results = mockFunctions.parseLog(currentTick.logText, (characterId, updatedData) => {
+        const results = apiFunctions.parseLog(currentTick.logText, (characterId, updatedData) => {
           console.log('DEBUG: Character update callback for ID:', characterId, 'with data:', updatedData);
         });
         
@@ -1227,7 +1215,7 @@ const OpenDKPApp = () => {
 
     const handleCreateRaid = () => {
       console.log('Creating raid with data:', { ...raidData, ticks });
-      mockFunctions.createRaid();
+      apiFunctions.createRaid();
     };
 
     return (
@@ -1441,7 +1429,7 @@ The parser will:
                               <span className="text-xs text-gray-400 dark:text-gray-500">{char.guild}</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              {mockCharacters.find(c => c.name.toLowerCase() === char.name.toLowerCase()) ? (
+                              {characters.find(c => c.name.toLowerCase() === char.name.toLowerCase()) ? (
                                 <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center">
                                   <Check className="h-3 w-3 mr-1" />
                                   Exists
@@ -1529,7 +1517,7 @@ The parser will:
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Character</label>
               <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
                 <option>Select Character</option>
-                {mockCharacters.map(char => (
+                {characters.map(char => (
                   <option key={char.id} value={char.name}>{char.name}</option>
                 ))}
               </select>
@@ -1551,7 +1539,7 @@ The parser will:
               />
             </div>
             <button 
-              onClick={mockFunctions.createAdjustment}
+              onClick={apiFunctions.createAdjustment}
               className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Create Adjustment
@@ -1636,7 +1624,7 @@ The parser will:
           </div>
           <div className="mt-6">
             <button 
-              onClick={mockFunctions.createCharacter}
+              onClick={apiFunctions.createCharacter}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
             >
               Create Character
@@ -1648,7 +1636,7 @@ The parser will:
   );
 
   const TickManagement = () => {
-    const allTicks = mockRaids.flatMap(raid => 
+    const allTicks = raids.flatMap(raid => 
       raid.ticks ? raid.ticks.map(tick => ({
         ...tick,
         raidName: raid.name,
@@ -1663,7 +1651,7 @@ The parser will:
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Tick Management</h2>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              {allTicks.length} total ticks across {mockRaids.length} raids
+              {allTicks.length} total ticks across {raids?.length || 0} raids
             </div>
           </div>
           
@@ -1713,13 +1701,13 @@ The parser will:
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button 
-                          onClick={() => mockFunctions.editTick(tick.raidId, tick.id)}
+                          onClick={() => apiFunctions.editTick(tick.raidId, tick.id)}
                           className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
-                          onClick={() => mockFunctions.deleteTick(tick.raidId, tick.id)}
+                          onClick={() => apiFunctions.deleteTick(tick.raidId, tick.id)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1776,7 +1764,7 @@ The parser will:
         
         <div className="mt-6 flex justify-end">
           <button 
-            onClick={mockFunctions.saveSettings}
+            onClick={apiFunctions.saveSettings}
             className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
           >
             Save Settings
@@ -1792,7 +1780,7 @@ The parser will:
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">User Management</h2>
           <button 
-            onClick={mockFunctions.manageUsers}
+            onClick={apiFunctions.manageUsers}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
           >
             <PlusCircle className="h-5 w-5 mr-2" />
@@ -1994,6 +1982,15 @@ The parser will:
         </div>
       </div>
     </div>
+  );
+};
+
+// Wrapper component that provides context
+const OpenDKPApp = () => {
+  return (
+    <AppProvider>
+      <OpenDKPAppContent />
+    </AppProvider>
   );
 };
 
