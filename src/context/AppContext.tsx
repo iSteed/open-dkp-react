@@ -328,6 +328,9 @@ export function AppProvider({ children }: AppProviderProps) {
         
         if (result.success) {
           return true;
+        } else if (result.requiresConfirmation) {
+          // Signup successful but requires email confirmation
+          return true;
         } else {
           dispatch({ 
             type: 'SET_ERROR', 

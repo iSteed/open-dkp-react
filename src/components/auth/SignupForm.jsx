@@ -85,7 +85,10 @@ const SignupForm = ({ onShowLogin, onShowConfirmation }) => {
       );
 
       if (success) {
+        console.log('Signup successful, redirecting to confirmation for:', formData.username);
         onShowConfirmation(formData.username);
+      } else {
+        console.log('Signup failed');
       }
     } catch (error) {
       console.error('Signup error:', error);
