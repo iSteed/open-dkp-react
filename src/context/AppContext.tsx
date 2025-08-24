@@ -1,7 +1,7 @@
 // context/AppContext.tsx - Global application context and provider
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { apiClient } from '../api/services';
+import { apiClient } from '../api/services.ts';
 import { Client, CharacterWithDKP, Pool } from '../types/database';
 
 // Application state interface

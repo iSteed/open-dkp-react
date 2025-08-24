@@ -29,7 +29,7 @@ import {
   guildService,
   userService,
   apiClient,
-} from '../api/services';
+} from '../api/services.ts';
 
 // Generic hook for API state management
 function useApiState<T>() {

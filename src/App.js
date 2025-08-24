@@ -36,8 +36,8 @@ import {
   useUsers,
   useTicks,
   useClientConfig
-} from './hooks/useData';
-import { AppProvider } from './context/AppContext';
+} from './hooks/useData.ts';
+import { AppProvider } from './context/AppContext.tsx';
 
 // Main app component that uses hooks for data
 const OpenDKPAppContent = () => {
@@ -168,6 +168,7 @@ const OpenDKPAppContent = () => {
     },
     autoCreateCharacter: async (name, level, guild, characterClass) => {
       await createCharacter({ name, level, guild, character_class: characterClass });
+    },
     editRaid: (id) => {
       console.log('DEBUG: Would call API to edit raid with ID: ' + id);
       console.log('API Call: PUT /api/raids/' + id);
