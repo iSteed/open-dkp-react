@@ -20,7 +20,8 @@ import {
   Check,
   AlertCircle,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
 import { 
   useCharacters, 
@@ -37,14 +38,18 @@ import {
   useTicks,
   useClientConfig
 } from './hooks/useData.ts';
-import { AppProvider } from './context/AppContext.tsx';
+import { AppProvider, usePreferences, useAuth, useApp } from './context/AppContext.tsx';
+import AuthContainer from './components/auth/AuthContainer';
 
 // Main app component that uses hooks for data
 const OpenDKPAppContent = () => {
+  const { isAuthenticated, currentUser } = useAuth();
+  const { actions } = useApp();
   const [currentPage, setCurrentPage] = useState('summary');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState('officer');
-  const [darkMode, setDarkMode] = useState(false);
+  const { preferences, updatePreferences } = usePreferences();
+  const darkMode = preferences.theme === 'dark';
   const [expandedSections, setExpandedSections] = useState({
     home: true,
     utilities: true,
@@ -1868,6 +1873,11 @@ The parser will:
     !section.adminOnly || userRole === 'admin' || userRole === 'officer'
   );
 
+  // Show authentication container if user is not authenticated
+  if (!isAuthenticated) {
+    return <AuthContainer />;
+  }
+
   return (
     <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-100'}`}>
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -1891,22 +1901,39 @@ The parser will:
             
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => setDarkMode(!darkMode)}
+                onClick={() => updatePreferences({ theme: darkMode ? 'light' : 'dark' })}
                 className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
               >
                 {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400">Role:</span>
-                <select 
-                  value={userRole} 
-                  onChange={(e) => setUserRole(e.target.value)}
-                  className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1"
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Role:</span>
+                  <select 
+                    value={userRole} 
+                    onChange={(e) => setUserRole(e.target.value)}
+                    className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1"
+                  >
+                    <option value="member">Member</option>
+                    <option value="officer">Officer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {currentUser?.email || currentUser?.username || 'User'}
+                  </span>
+                </div>
+
+                <button
+                  onClick={actions.logout}
+                  className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300"
+                  title="Sign out"
                 >
-                  <option value="member">Member</option>
-                  <option value="officer">Officer</option>
-                  <option value="admin">Admin</option>
-                </select>
+                  <LogOut className="h-5 w-5" />
+                </button>
               </div>
             </div>
           </div>

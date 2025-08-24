@@ -3,12 +3,13 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { apiClient } from '../api/services.ts';
 import { Client, CharacterWithDKP, Pool } from '../types/database';
+import CognitoAuthService, { type CognitoUser } from '../services/cognitoAuth.ts';
 
 // Application state interface
 interface AppState {
   // Authentication & Client
   isAuthenticated: boolean;
-  currentUser: string | null;
+  currentUser: CognitoUser | null;
   currentClient: Client | null;
   clientId: string | null;
   
@@ -40,7 +41,7 @@ interface AppState {
 
 // Action types
 type AppAction = 
-  | { type: 'SET_AUTHENTICATION'; payload: { isAuthenticated: boolean; user: string | null } }
+  | { type: 'SET_AUTHENTICATION'; payload: { isAuthenticated: boolean; user: CognitoUser | null } }
   | { type: 'SET_CLIENT'; payload: Client | null }
   | { type: 'SET_CLIENT_ID'; payload: string | null }
   | { type: 'SET_CHARACTERS'; payload: CharacterWithDKP[] }
@@ -72,7 +73,7 @@ const initialState: AppState = {
     authentication: null,
   },
   preferences: {
-    theme: 'light',
+    theme: 'dark',
     itemsPerPage: 50,
     defaultPool: null,
     showInactiveCharacters: false,
@@ -175,8 +176,13 @@ interface AppContextType {
   dispatch: React.Dispatch<AppAction>;
   actions: {
     // Authentication
-    login: (user: string, clientId: string) => void;
-    logout: () => void;
+    login: (username: string, password: string) => Promise<boolean>;
+    logout: () => Promise<void>;
+    signUp: (username: string, password: string, email: string, phone?: string) => Promise<boolean>;
+    confirmSignUp: (username: string, code: string) => Promise<boolean>;
+    resetPassword: (username: string) => Promise<boolean>;
+    confirmResetPassword: (username: string, code: string, newPassword: string) => Promise<boolean>;
+    checkAuthStatus: () => Promise<void>;
     
     // Data loading
     loadCharacters: () => Promise<void>;
@@ -205,6 +211,35 @@ interface AppProviderProps {
 export function AppProvider({ children }: AppProviderProps) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
+  // Check auth status function
+  const checkAuthStatus = async (): Promise<void> => {
+    try {
+      const isAuthenticated = await CognitoAuthService.isAuthenticated();
+      
+      if (isAuthenticated) {
+        const user = await CognitoAuthService.getCurrentUser();
+        if (user) {
+          dispatch({ 
+            type: 'SET_AUTHENTICATION', 
+            payload: { isAuthenticated: true, user } 
+          });
+          
+          // Set up API client with access token
+          const token = await CognitoAuthService.getAccessToken();
+          if (token) {
+            apiClient.setAuthToken(token);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Auth status check failed:', error);
+      dispatch({ 
+        type: 'SET_AUTHENTICATION', 
+        payload: { isAuthenticated: false, user: null } 
+      });
+    }
+  };
+
   // Load preferences from localStorage
   useEffect(() => {
     const savedPreferences = localStorage.getItem('opendkp_preferences');
@@ -224,14 +259,8 @@ export function AppProvider({ children }: AppProviderProps) {
       apiClient.setClientId(savedClientId);
     }
 
-    // Load saved authentication
-    const savedUser = localStorage.getItem('opendkp_current_user');
-    if (savedUser) {
-      dispatch({ 
-        type: 'SET_AUTHENTICATION', 
-        payload: { isAuthenticated: true, user: savedUser } 
-      });
-    }
+    // Check Cognito authentication status
+    checkAuthStatus();
   }, []);
 
   // Save preferences to localStorage when they change
@@ -241,22 +270,145 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // Actions
   const actions = {
-    login: (user: string, clientId: string) => {
-      dispatch({ type: 'SET_AUTHENTICATION', payload: { isAuthenticated: true, user } });
-      dispatch({ type: 'SET_CLIENT_ID', payload: clientId });
-      apiClient.setClientId(clientId);
-      
-      localStorage.setItem('opendkp_current_user', user);
-      localStorage.setItem('opendkp_client_id', clientId);
+    login: async (username: string, password: string): Promise<boolean> => {
+      dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: true } });
+      dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: null } });
+
+      try {
+        const result = await CognitoAuthService.signIn(username, password);
+        
+        if (result.success && result.user) {
+          dispatch({ 
+            type: 'SET_AUTHENTICATION', 
+            payload: { isAuthenticated: true, user: result.user } 
+          });
+          
+          // Set up API client with access token
+          const token = await CognitoAuthService.getAccessToken();
+          if (token) {
+            // You can use the token for API authorization headers
+            apiClient.setAuthToken(token);
+          }
+          
+          return true;
+        } else {
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: { key: 'authentication', value: result.error || 'Login failed' } 
+          });
+          return false;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Login failed';
+        dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: errorMessage } });
+        return false;
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: false } });
+      }
     },
 
-    logout: () => {
-      dispatch({ type: 'RESET_STATE' });
-      
-      localStorage.removeItem('opendkp_current_user');
-      localStorage.removeItem('opendkp_client_id');
-      apiClient.setClientId('');
+    logout: async (): Promise<void> => {
+      try {
+        await CognitoAuthService.signOut();
+        dispatch({ type: 'RESET_STATE' });
+        localStorage.removeItem('opendkp_client_id');
+        apiClient.setClientId('');
+        apiClient.setAuthToken('');
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     },
+
+    signUp: async (username: string, password: string, email: string, phone?: string): Promise<boolean> => {
+      dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: true } });
+      dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: null } });
+
+      try {
+        const result = await CognitoAuthService.signUp(username, password, email, phone);
+        
+        if (result.success) {
+          return true;
+        } else {
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: { key: 'authentication', value: result.error || 'Sign up failed' } 
+          });
+          return false;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
+        dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: errorMessage } });
+        return false;
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: false } });
+      }
+    },
+
+    confirmSignUp: async (username: string, code: string): Promise<boolean> => {
+      dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: true } });
+      
+      try {
+        const result = await CognitoAuthService.confirmSignUp(username, code);
+        
+        if (result.success) {
+          return true;
+        } else {
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: { key: 'authentication', value: result.error || 'Confirmation failed' } 
+          });
+          return false;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Confirmation failed';
+        dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: errorMessage } });
+        return false;
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: { key: 'authentication', value: false } });
+      }
+    },
+
+    resetPassword: async (username: string): Promise<boolean> => {
+      try {
+        const result = await CognitoAuthService.resetPassword(username);
+        
+        if (result.success) {
+          return true;
+        } else {
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: { key: 'authentication', value: result.error || 'Password reset failed' } 
+          });
+          return false;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Password reset failed';
+        dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: errorMessage } });
+        return false;
+      }
+    },
+
+    confirmResetPassword: async (username: string, code: string, newPassword: string): Promise<boolean> => {
+      try {
+        const result = await CognitoAuthService.confirmResetPassword(username, code, newPassword);
+        
+        if (result.success) {
+          return true;
+        } else {
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: { key: 'authentication', value: result.error || 'Password reset confirmation failed' } 
+          });
+          return false;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Password reset confirmation failed';
+        dispatch({ type: 'SET_ERROR', payload: { key: 'authentication', value: errorMessage } });
+        return false;
+      }
+    },
+
+    checkAuthStatus,
 
     loadCharacters: async () => {
       dispatch({ type: 'SET_LOADING', payload: { key: 'characters', value: true } });

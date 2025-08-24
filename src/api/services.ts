@@ -34,14 +34,20 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:300
 class ApiClient {
   private baseUrl: string;
   private clientId: string;
+  private authToken: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
     this.clientId = ''; // Will be set after authentication
+    this.authToken = ''; // Will be set after Cognito authentication
   }
 
   setClientId(clientId: string) {
     this.clientId = clientId;
+  }
+
+  setAuthToken(token: string) {
+    this.authToken = token;
   }
 
   private async request<T>(
@@ -53,6 +59,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'X-Client-ID': this.clientId,
+        ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` }),
         ...options.headers,
       },
       ...options,
